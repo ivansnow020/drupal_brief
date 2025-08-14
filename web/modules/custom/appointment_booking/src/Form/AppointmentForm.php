@@ -64,7 +64,7 @@ class AppointmentForm extends FormBase {
 
 
   public function buildForm(array $form, FormStateInterface $form_state) {
-    // Attach our custom CSS library for styling.
+    // Attach CSS library
     $form['#attached']['library'][] = 'appointment_booking/form-styling';
 
     // Handle pre-selection of a doctor from the URL query parameter.
@@ -79,9 +79,9 @@ class AppointmentForm extends FormBase {
         '#markup' => $this->t('Booking an appointment with: <strong>@name</strong>', ['@name' => $doctor->getTitle()]),
       ];
     } else {
-      // Fallback: If no doctor is pre-selected, show a dropdown list.
+      // If no doctor is pre-selected, show a dropdown list.
       $query = $doctor_storage->getQuery()
-        ->condition('type', 'doctor') // Use the machine name of your content type.
+        ->condition('type', 'doctor') 
         ->condition('status', 1)
         ->accessCheck(TRUE)
         ->sort('title', 'ASC');
@@ -101,16 +101,16 @@ class AppointmentForm extends FormBase {
       ];
     }
 
-    // Use the Flatpickr module for an enhanced date/time selection UI.
+    // Datetime selection
     $form['appointment_date'] = [
         '#type' => 'date',
         '#title' => $this->t('Appointment Date'),
         '#required' => TRUE,
-        // Add an attribute to prevent picking past dates. The browser should enforce this.
+        // Prevent picking past dates
         '#attributes' => ['min' => (new DateTime())->format('Y-m-d')],
       ];
-      // Generate the 30-minute time slots for a select list.
 
+    // Generate 30-minute time slots for a select list.
     $time_slots = [];
     $start_time = new DateTime('07:00');
     $end_time = new DateTime('17:30');
@@ -128,7 +128,7 @@ class AppointmentForm extends FormBase {
         '#empty_option' => $this->t('- Select a time -'),
     ];
 
-    // Standard user detail fields.
+    // User detail fields.
     $form['your_name'] = ['#type' => 'textfield', '#title' => $this->t('Your Name'), '#required' => TRUE];
     $form['your_email'] = ['#type' => 'email', '#title' => $this->t('Your Email'), '#required' => TRUE];
     $form['appointment_reason'] = ['#type' => 'textarea', '#title' => $this->t('Reason for Appointment')];
@@ -176,8 +176,9 @@ public function validateForm(array &$form, FormStateInterface $form_state) {
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    // In a real application, you would save the submission data here.
-    // For this example, we just display a success message.
+    
+    // Save / send the submission data here.
+
     $this->messenger->addStatus($this->t('Thank you! Your appointment request has been submitted.'));
     $url = Url::fromUri('internal:/doctors');
     $form_state->setRedirectUrl($url);
