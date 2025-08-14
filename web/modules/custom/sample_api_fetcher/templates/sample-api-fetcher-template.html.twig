@@ -1,0 +1,28 @@
+{#
+/**
+ * @file
+ * Template for the API Fetcher page.
+ *
+ * Available variables:
+ * - data: An array of users fetched from the sample API.
+ */
+#}
+
+
+<h2 class="page-title">User List</h2>
+
+{% if data %}
+  <div class="api-results">
+    {% for item in data %}
+      <article class="api-item">
+        <h3> {{ item.name }} </h3>
+        <p>Email: {{ item.email }} </p>
+        <p>City: {{ item.address.city }} </p>
+        <p>Website: {{ item.website}} </p>
+        <hr>
+      </article>
+    {% endfor %}
+  </div>
+{% else %}
+  <p>No data could be loaded.</p>
+{% endif %}

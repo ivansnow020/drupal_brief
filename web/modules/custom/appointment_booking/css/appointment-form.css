@@ -1,0 +1,32 @@
+/* File: modules/custom/appointment_booking/css/appointment-form.css */
+
+/* Style the form container for a cleaner look */
+#appointment-booking-form {
+    max-width: 600px;
+    margin: 2rem auto;
+    padding: 2rem;
+    background: #fdfdfd;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+  }
+  
+  /* Style the field for the pre-selected doctor's name */
+  #appointment-booking-form .form-item-doctor-name {
+    background-color: #eef7ff;
+    border-left: 4px solid #0d6efd;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+    border-radius: 4px;
+  }
+  
+  #appointment-booking-form .form-item-doctor-name strong {
+    font-size: 1.1rem;
+  }
+  
+  /* Give the final submit button some top margin */
+  #appointment-booking-form input.button--primary {
+    margin-top: 1.5rem;
+    width: 100%;
+    padding: 0.75rem;
+  }

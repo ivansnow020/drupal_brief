@@ -1,0 +1,5 @@
+name: Sample API Fetcher
+type: module
+description: 'Fetches user data from asample external API with caching, and displays it on a page.'
+core_version_requirement: ^10
+package: Custom

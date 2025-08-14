@@ -1,0 +1,7 @@
+appointment_booking.form:
+  path: '/appointments'
+  defaults:
+    _form: '\Drupal\appointment_booking\Form\AppointmentForm'
+    _title: 'Book an Appointment'
+  requirements:
+    _permission: 'access content'

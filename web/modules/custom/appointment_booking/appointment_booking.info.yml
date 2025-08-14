@@ -1,0 +1,5 @@
+name: Appointment Booking
+type: module
+description: 'Provides a custom page and form for booking doctor appointments.'
+core_version_requirement: ^10
+package: Custom

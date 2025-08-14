@@ -1,0 +1,5 @@
+form-styling:
+  version: 1.0
+  css:
+    theme:
+      css/appointment-form.css: {}

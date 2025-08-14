@@ -1,0 +1,7 @@
+sample_api_fetcher.content:
+  path: '/external-data'
+  defaults:
+    _controller: '\Drupal\sample_api_fetcher\Controller\ApiPageController::build'
+    _title: 'External API Data'
+  requirements:
+    _permission: 'access content'
