@@ -7,29 +7,30 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Messenger\MessengerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Drupal\Core\Datetime\DateFormatterInterface;
+use Drupal\Core\Config\ConfigFactoryInterface;
 use DateTime;
 use DateTimeZone;
 use Drupal\Core\Url;
+use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\ReplaceCommand;
+use Drupal\node\NodeInterface;
+
 
 /**
  * Implements the appointment booking form.
  */
 class AppointmentForm extends FormBase {
 
-  /**
-   * The entity type manager service.
-   *
-   * @var \Drupal\Core\Entity\EntityTypeManagerInterface
-   */
-  protected $entityTypeManager;
+ 
+  protected EntityTypeManagerInterface $entityTypeManager;
 
-  /**
-   * The messenger service.
-   *
-   * @var \Drupal\Core\Messenger\MessengerInterface
-   */
-  protected $messenger;
+  protected MessengerInterface $messenger;
 
+  protected DateTimeZone $siteTimezone;
+
+  protected DateFormatterInterface $dateFormatter;
+  
   /**
    * Constructs an AppointmentForm object.
    *
@@ -38,9 +39,13 @@ class AppointmentForm extends FormBase {
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
    * The messenger service.
    */
-  public function __construct(EntityTypeManagerInterface $entity_type_manager, MessengerInterface $messenger) {
+  public function __construct(EntityTypeManagerInterface $entity_type_manager, MessengerInterface $messenger, DateFormatterInterface $date_formatter,  ConfigFactoryInterface $config_factory) {
     $this->entityTypeManager = $entity_type_manager;
     $this->messenger = $messenger;
+    $this->dateFormatter = $date_formatter;
+    $this->configFactory = $config_factory;
+    $timezone_name = $this->configFactory->get('system.date')->get('timezone.default');
+    $this->siteTimezone = new DateTimeZone($timezone_name);
   }
 
   /**
@@ -51,7 +56,9 @@ class AppointmentForm extends FormBase {
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('entity_type.manager'),
-      $container->get('messenger')
+      $container->get('messenger'),
+      $container->get('date.formatter'),
+      $container->get('config.factory') 
     );
   }
 
@@ -98,6 +105,10 @@ class AppointmentForm extends FormBase {
         '#options' => $options,
         '#required' => TRUE,
         '#empty_option' => $this->t('- Please select -'),
+        '#ajax' => [
+          'callback' => '::updateTimeSlotsCallback',
+          'wrapper' => 'appointment-time-wrapper',
+        ],
       ];
     }
 
@@ -108,25 +119,18 @@ class AppointmentForm extends FormBase {
         '#required' => TRUE,
         // Prevent picking past dates
         '#attributes' => ['min' => (new DateTime())->format('Y-m-d')],
+        '#ajax' => [
+        'callback' => '::updateTimeSlotsCallback',
+        'wrapper' => 'appointment-time-wrapper',
+        ],
       ];
 
-    // Generate 30-minute time slots for a select list.
-    $time_slots = [];
-    $start_time = new DateTime('07:00');
-    $end_time = new DateTime('17:30');
-    while ($start_time <= $end_time) {
-        $time_key = $start_time->format('H:i');
-        $time_slots[$time_key] = $time_key;
-        $start_time->modify('+30 minutes');
-    }
-
-    $form['appointment_time'] = [
-        '#type' => 'select',
-        '#title' => $this->t('Appointment Time'),
-        '#options' => $time_slots,
-        '#required' => TRUE,
-        '#empty_option' => $this->t('- Select a time -'),
+    $form['appointment_time_wrapper'] = [
+      '#type' => 'container',
+      '#attributes' => ['id' => 'appointment-time-wrapper'],
     ];
+    $form['appointment_time_wrapper']['appointment_time'] = $this->getTimeSlotsElement($form_state);
+
 
     // User detail fields.
     $form['your_name'] = ['#type' => 'textfield', '#title' => $this->t('Your Name'), '#required' => TRUE];
@@ -144,44 +148,195 @@ class AppointmentForm extends FormBase {
   }
 
   /**
+   * AJAX callback to update the available time slots.
+   */
+  public function updateTimeSlotsCallback(array &$form, FormStateInterface $form_state): AjaxResponse {
+    return (new AjaxResponse())->addCommand(
+      new ReplaceCommand('#appointment-time-wrapper', $form['appointment_time_wrapper'])
+    );
+  }
+  
+  /**
+   * Helper function to generate the time slots form element.
+   */
+  protected function getTimeSlotsElement(FormStateInterface $form_state): array {
+    $doctor_id = $form_state->getValue('doctor_id');
+    $date_str = $form_state->getValue('appointment_date');
+    
+    if (empty($doctor_id) || empty($date_str)) {
+        return [
+            '#type' => 'select',
+            '#title' => $this->t('Appointment Time'),
+            '#options' => [],
+            '#disabled' => TRUE,
+            '#required' => TRUE,
+            '#description' => $this->t('Please select a doctor and a date first.'),
+        ];
+    }
+    
+    $booked_slots = $this->getBookedTimeSlots($doctor_id, $date_str);
+    $now = new DateTime('now', $this->siteTimezone);
+    $time_slots = [];
+    
+    // Generate potential slots and their status
+    $current_slot_time = new DateTime('07:00');
+    $end_time = new DateTime('17:30');
+    while ($current_slot_time <= $end_time) {
+        $time_key = $current_slot_time->format('H:i');
+        $slot_datetime = DateTime::createFromFormat('Y-m-d H:i', $date_str . ' ' . $time_key, $this->siteTimezone);
+
+        $is_past = $slot_datetime < $now;
+        $is_booked = in_array($time_key, $booked_slots);
+        
+        $option = ['text' => $time_key, 'disabled' => FALSE];
+        if ($is_booked) {
+            $option = ['text' => "$time_key - Booked", 'disabled' => TRUE];
+        } 
+        elseif ($is_past) {
+            $option = ['text' => "$time_key - Unavailable", 'disabled' => TRUE];
+        }
+        $time_slots[$time_key] = $option;
+        
+        $current_slot_time->modify('+30 minutes');
+    }
+
+    $element = [
+        '#type' => 'select',
+        '#title' => $this->t('Appointment Time'),
+        '#required' => TRUE,
+        '#empty_option' => $this->t('- Select a time -'),
+        '#options' => [],
+        '#disabled_values' => []
+    ];
+
+    // Build options with disabled attributes where necessary.
+    foreach ($time_slots as $key => $option) {
+        if ($option['disabled']) {
+            array_push($element['#disabled_values'], $key);
+        } else {
+            $element['#options'][$key] = $option['text'];
+        }
+    }
+
+    return $element;
+  }
+
+  /**
+   * Helper function to query for existing appointments.
+   */
+  protected function getBookedTimeSlots(int $doctor_id, string $date_str): array {
+    $start_of_day = DateTime::createFromFormat('Y-m-d H:i:s', "$date_str 00:00:00", $this->siteTimezone);
+    $end_of_day = DateTime::createFromFormat('Y-m-d H:i:s', "$date_str 23:59:59", $this->siteTimezone);
+    
+    // Convert to UTC for the database query.
+    $start_of_day->setTimezone(new DateTimeZone('UTC'));
+    $end_of_day->setTimezone(new DateTimeZone('UTC'));
+
+    $query = $this->entityTypeManager->getStorage('node')->getQuery()
+      ->condition('type', 'appointment')
+      ->condition('status', NodeInterface::PUBLISHED)
+      ->condition('field_doctor', $doctor_id)
+      ->condition('field_appointment_datetime', $start_of_day->format('Y-m-d\TH:i:s'), '>=')
+      ->condition('field_appointment_datetime', $end_of_day->format('Y-m-d\TH:i:s'), '<=')
+      ->accessCheck(TRUE);
+    
+    $nids = $query->execute();
+    if (empty($nids)) {
+      return [];
+    }
+    
+    $appointments = $this->entityTypeManager->getStorage('node')->loadMultiple($nids);
+    $booked_slots = [];
+    foreach ($appointments as $appointment) {
+      $datetime_value = $appointment->get('field_appointment_datetime')->value;
+      $date = new DateTime($datetime_value, new DateTimeZone('UTC'));
+      $date->setTimezone($this->siteTimezone);
+      $booked_slots[] = $date->format('H:i');
+    }
+    
+    return $booked_slots;
+  }
+
+  /**
  * {@inheritdoc}
  */
 public function validateForm(array &$form, FormStateInterface $form_state) {
-    parent::validateForm($form, $form_state);
+  parent::validateForm($form, $form_state);
+
+  $date_str = $form_state->getValue('appointment_date');
+  $time_str = $form_state->getValue('appointment_time');
+  $doctor_id = $form_state->getValue('doctor_id');
+
+  if (empty($date_str) || empty($time_str) || empty($doctor_id)) return;
   
-    // Get the separate date and time values.
-    $date_str = $form_state->getValue('appointment_date');
-    $time_str = $form_state->getValue('appointment_time');
-  
-    if (empty($date_str) || empty($time_str)) {
-      return;
+  try {
+    $appointment_datetime = DateTime::createFromFormat('Y-m-d H:i', "$date_str $time_str", $this->siteTimezone);
+    if (!$appointment_datetime) throw new \Exception('Invalid date/time format.');
+
+    // Validate past bookings.
+    if ($appointment_datetime < new DateTime('now', $this->siteTimezone)) {
+        $form_state->setErrorByName('appointment_time', $this->t('You cannot book an appointment in the past.'));
     }
-  
-    try {
-      $timezone = new \DateTimeZone('CET');
-      // Combine the date and time strings to create a full DateTime object.
-      $appointment_datetime = new \DateTime($date_str . ' ' . $time_str, $timezone);
-  
-      // Validate that the day is a weekday (Monday=1, Sunday=7).
-      $day_of_week = (int) $appointment_datetime->format('N');
-      if ($day_of_week >= 6) {
-        $form_state->setErrorByName('appointment_date', $this->t('Appointments can only be booked on weekdays.'));
-      }
-    } catch (\Exception $e) {
-      $form_state->setErrorByName('appointment_date', $this->t('The provided date or time format is invalid.'));
+
+    // Validate weekday booking.
+    if ((int) $appointment_datetime->format('N') >= 6) {
+      $form_state->setErrorByName('appointment_date', $this->t('Appointments can only be booked on weekdays.'));
     }
+
+    // Validate duplicate bookings 
+    $appointment_datetime_utc = (clone $appointment_datetime)->setTimezone(new DateTimeZone('UTC'));
+    
+    $query = $this->entityTypeManager->getStorage('node')->getQuery()
+      ->condition('type', 'appointment')
+      ->condition('status', NodeInterface::PUBLISHED)
+      ->condition('field_doctor', $doctor_id)
+      ->condition('field_appointment_datetime', $appointment_datetime_utc->format('Y-m-d\TH:i:s'))
+      ->accessCheck(TRUE);
+    
+    if ($query->count()->execute() > 0) {
+      $form_state->setErrorByName('appointment_time', $this->t('This time slot is no longer available. Please select another time.'));
+    }
+  } 
+  catch (\Exception $e) {
+    $form_state->setErrorByName('appointment_date', $this->t('The provided date or time format is invalid.'));
   }
+}
 
   /**
    * {@inheritdoc}
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    
-    // Save / send the submission data here.
+    try {
+        $values = $form_state->getValues();
+        $appointment_datetime = DateTime::createFromFormat('Y-m-d H:i', $values['appointment_date'] . ' ' . $values['appointment_time'], $this->siteTimezone);
+        $appointment_datetime->setTimezone(new DateTimeZone('UTC'));
 
-    $this->messenger->addStatus($this->t('Thank you! Your appointment request has been submitted.'));
-    $url = Url::fromUri('internal:/doctors');
-    $form_state->setRedirectUrl($url);
+        $doctor_node = $this->entityTypeManager->getStorage('node')->load($values['doctor_id']);
+
+        $appointment = $this->entityTypeManager->getStorage('node')->create([
+            'type' => 'appointment',
+            'title' => $this->t('Appointment for @name with @doctor', [
+                '@name' => $values['your_name'],
+                '@doctor' => $doctor_node ? $doctor_node->getTitle() : 'N/A',
+            ]),
+            'status' => NodeInterface::PUBLISHED,
+            'field_doctor' => $values['doctor_id'],
+            'field_appointment_datetime' => $appointment_datetime->format('Y-m-d\TH:i:s'),
+            'field_patient_name' => $values['your_name'],
+            'field_patient_email' => $values['your_email'],
+            'field_appointment_reason' => $values['appointment_reason'],
+        ]);
+        $appointment->save();
+
+        $this->messenger->addStatus($this->t('Thank you, @name! Your appointment for @time has been confirmed.', [
+            '@name' => $values['your_name'],
+            '@time' => $this->dateFormatter->format($appointment_datetime->getTimestamp(), 'long'),
+        ]));
+        
+        $form_state->setRedirectUrl(Url::fromRoute('entity.node.canonical', ['node' => $values['doctor_id']]));
+    } catch (\Exception $e) {
+        $this->messenger->addError($this->t('There was an error saving your appointment. Please try again.'));
+    }
   }
 
 }

@@ -1,5 +1,5 @@
 appointment_booking.form:
-  path: '/appointments'
+  path: '/appointment'
   defaults:
     _form: '\Drupal\appointment_booking\Form\AppointmentForm'
     _title: 'Book an Appointment'

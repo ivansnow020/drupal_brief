@@ -1,9 +1,9 @@
 <?php return array(
     'root' => array(
         'name' => 'drupal/recommended-project',
-        'pretty_version' => '1.0.0+no-version-set',
-        'version' => '1.0.0.0',
-        'reference' => null,
+        'pretty_version' => 'dev-main',
+        'version' => 'dev-main',
+        'reference' => 'fd7a54d9c534359ec04a0442e678bebd5fa2f817',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -334,15 +334,6 @@
                 0 => '10.5.2',
             ),
         ),
-        'drupal/datetime_flatpickr' => array(
-            'pretty_version' => '3.0.6',
-            'version' => '3.0.6.0',
-            'reference' => '3.0.6',
-            'type' => 'drupal-module',
-            'install_path' => __DIR__ . '/../../web/modules/contrib/datetime_flatpickr',
-            'aliases' => array(),
-            'dev_requirement' => false,
-        ),
         'drupal/metatag' => array(
             'pretty_version' => '2.1.1',
             'version' => '2.1.1.0',
@@ -353,9 +344,9 @@
             'dev_requirement' => false,
         ),
         'drupal/recommended-project' => array(
-            'pretty_version' => '1.0.0+no-version-set',
-            'version' => '1.0.0.0',
-            'reference' => null,
+            'pretty_version' => 'dev-main',
+            'version' => 'dev-main',
+            'reference' => 'fd7a54d9c534359ec04a0442e678bebd5fa2f817',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),

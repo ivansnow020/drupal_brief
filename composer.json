@@ -19,7 +19,6 @@
         "drupal/core-composer-scaffold": "^10.5",
         "drupal/core-project-message": "^10.5",
         "drupal/core-recommended": "^10.5",
-        "drupal/datetime_flatpickr": "^3.0",
         "drupal/metatag": "^2.1",
         "drush/drush": "^13.6"
     },
