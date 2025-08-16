@@ -24,8 +24,8 @@ class AppointmentForm extends FormBase {
 
  
   protected EntityTypeManagerInterface $entityTypeManager;
-
-  protected MessengerInterface $messenger;
+  
+  protected $messenger;
 
   protected DateTimeZone $siteTimezone;
 
